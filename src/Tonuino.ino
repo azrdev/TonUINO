@@ -55,7 +55,7 @@ struct adminSettings {
   uint8_t maxVolume;
   uint8_t minVolume;
   uint8_t initVolume;
-  uint8_t eq;
+  DfMp3_Eq eq;
   bool locked;
   long standbyTimer;
   bool invertVolumeButtons;
@@ -72,8 +72,13 @@ signed long power_led_pin_next_modechange;
 static uint16_t _lastTrackFinished;
 
 static void nextTrack(uint16_t track);
-uint8_t voiceMenu(int numberOfOptions, int startMessage, int messageOffset,
-                  bool preview = false, int previewFromFolder = 0, int defaultValue = 0, bool exitWithLongPress = false);
+uint8_t voiceMenu(int numberOfOptions,
+                  int startMessage,
+                  int messageOffset,
+                  bool preview = false,
+                  int previewFromFolder = 0,
+                  int defaultValue = 0,
+                  bool exitWithLongPress = false);
 bool isPlaying();
 bool checkTwo ( uint8_t a[], uint8_t b[] );
 void writeCard(nfcTagObject nfcTag);
@@ -151,7 +156,7 @@ void resetSettings() {
   mySettings.maxVolume = 25;
   mySettings.minVolume = 5;
   mySettings.initVolume = 15;
-  mySettings.eq = 1;
+  mySettings.eq = DfMp3_Eq::DfMp3_Eq_Pop;
   mySettings.locked = false;
   mySettings.standbyTimer = 0;
   mySettings.invertVolumeButtons = true;
@@ -254,9 +259,8 @@ class Modifier {
     virtual uint8_t getActive() {
       return 0;
     }
-    Modifier() {
-
-    }
+    Modifier() {}
+    virtual ~Modifier() {};
 };
 
 Modifier *activeModifier = NULL;
@@ -709,7 +713,7 @@ bool isPlaying() {
 }
 
 void waitForTrackToFinish() {
-  long currentTime = millis();
+  unsigned long currentTime = millis();
 #define TIMEOUT 1000
   do {
     mp3.loop();
@@ -757,7 +761,7 @@ void setup() {
   delay(2000);
   volume = mySettings.initVolume;
   mp3.setVolume(volume);
-  mp3.setEq(mySettings.eq - 1);
+  mp3.setEq(static_cast<DfMp3_Eq>(mySettings.eq - 1));
   // Fix für das Problem mit dem Timeout (ist jetzt in Upstream daher nicht mehr nötig!)
   //mySoftwareSerial.setTimeout(10000);
 
@@ -788,7 +792,7 @@ void setup() {
   if (digitalRead(buttonPause) == LOW && digitalRead(buttonUp) == LOW &&
       digitalRead(buttonDown) == LOW) {
     Serial.println(F("Reset -> EEPROM wird gelöscht"));
-    for (int i = 0; i < EEPROM.length(); i++) {
+    for (unsigned int i = 0; i < EEPROM.length(); i++) {
       EEPROM.update(i, 0);
     }
     loadSettingsFromFlash();
@@ -989,10 +993,11 @@ void loop() {
     }
 
     if (pauseButton.wasReleased()) {
-      if (activeModifier != NULL)
+      if (activeModifier != NULL) {
         if (activeModifier->handlePause() == true)
           return;
-      if (ignorePauseButton == false)
+      }
+      if (ignorePauseButton == false) {
         if (isPlaying()) {
           mp3.pause();
           setstandbyTimer();
@@ -1001,6 +1006,7 @@ void loop() {
           mp3.start();
           disablestandbyTimer();
         }
+      }
       ignorePauseButton = false;
     } else if (pauseButton.pressedFor(LONG_PRESS) &&
                ignorePauseButton == false) {
@@ -1030,12 +1036,10 @@ void loop() {
     if (upButton.pressedFor(LONG_PRESS)) {
 #ifndef FIVEBUTTONS
       if (isPlaying()) {
-        if (!mySettings.invertVolumeButtons) {
+        if (!mySettings.invertVolumeButtons)
           volumeUpButton();
-        }
-        else {
+        else
           nextButton();
-        }
       }
       else {
         playShortCut(1);
@@ -1043,25 +1047,22 @@ void loop() {
       ignoreUpButton = true;
 #endif
     } else if (upButton.wasReleased()) {
-      if (!ignoreUpButton)
-        if (!mySettings.invertVolumeButtons) {
+      if (!ignoreUpButton) {
+        if (!mySettings.invertVolumeButtons)
           nextButton();
-        }
-        else {
+        else
           volumeUpButton();
-        }
+      }
       ignoreUpButton = false;
     }
 
     if (downButton.pressedFor(LONG_PRESS)) {
 #ifndef FIVEBUTTONS
       if (isPlaying()) {
-        if (!mySettings.invertVolumeButtons) {
+        if (!mySettings.invertVolumeButtons)
           volumeDownButton();
-        }
-        else {
+        else
           previousButton();
-        }
       }
       else {
         playShortCut(2);
@@ -1070,24 +1071,20 @@ void loop() {
 #endif
     } else if (downButton.wasReleased()) {
       if (!ignoreDownButton) {
-        if (!mySettings.invertVolumeButtons) {
+        if (!mySettings.invertVolumeButtons)
           previousButton();
-        }
-        else {
+        else
           volumeDownButton();
-        }
       }
       ignoreDownButton = false;
     }
 #ifdef FIVEBUTTONS
     if (buttonFour.wasReleased()) {
       if (isPlaying()) {
-        if (!mySettings.invertVolumeButtons) {
+        if (!mySettings.invertVolumeButtons)
           volumeUpButton();
-        }
-        else {
+        else
           nextButton();
-        }
       }
       else {
         playShortCut(1);
@@ -1095,12 +1092,10 @@ void loop() {
     }
     if (buttonFive.wasReleased()) {
       if (isPlaying()) {
-        if (!mySettings.invertVolumeButtons) {
+        if (!mySettings.invertVolumeButtons)
           volumeDownButton();
-        }
-        else {
+        else
           previousButton();
-        }
       }
       else {
         playShortCut(2);
@@ -1138,7 +1133,7 @@ void loop() {
   mfrc522.PCD_StopCrypto1();
 }
 
-void adminMenu(bool fromCard = false) {
+void adminMenu(bool fromCard /* = false */ ) {
   disablestandbyTimer();
   mp3.pause();
   Serial.println(F("=== adminMenu()"));
@@ -1212,8 +1207,9 @@ void adminMenu(bool fromCard = false) {
   }
   else if (subMenu == 5) {
     // EQ
-    mySettings.eq = voiceMenu(6, 920, 920, false, false, mySettings.eq);
-    mp3.setEq(mySettings.eq - 1);
+    mySettings.eq = static_cast<DfMp3_Eq>(
+        voiceMenu(6, 920, 920, false, false, mySettings.eq));
+    mp3.setEq(static_cast<DfMp3_Eq>(mySettings.eq - 1));
   }
   else if (subMenu == 6) {
     // create modifier card
@@ -1321,7 +1317,7 @@ void adminMenu(bool fromCard = false) {
   }
   else if (subMenu == 11) {
     Serial.println(F("Reset -> EEPROM wird gelöscht"));
-    for (int i = 0; i < EEPROM.length(); i++) {
+    for (unsigned int i = 0; i < EEPROM.length(); i++) {
       EEPROM.update(i, 0);
     }
     resetSettings();
@@ -1337,7 +1333,7 @@ void adminMenu(bool fromCard = false) {
       mySettings.adminMenuLocked = 1;
     }
     else if (temp == 3) {
-      int8_t pin[4];
+      uint8_t pin[4];
       mp3.playMp3FolderTrack(991);
       if (askCode(pin)) {
         memcpy(mySettings.adminMenuPin, pin, 4);
@@ -1369,8 +1365,14 @@ bool askCode(uint8_t *code) {
   return true;
 }
 
-uint8_t voiceMenu(int numberOfOptions, int startMessage, int messageOffset,
-                  bool preview = false, int previewFromFolder = 0, int defaultValue = 0, bool exitWithLongPress = false) {
+uint8_t voiceMenu(int numberOfOptions,
+                  int startMessage,
+                  int messageOffset,
+                  bool preview, // = false,
+                  int previewFromFolder, // = 0,
+                  int defaultValue, // = 0,
+                  bool exitWithLongPress // = false
+                  ) {
   uint8_t returnValue = defaultValue;
   if (startMessage != 0)
     mp3.playMp3FolderTrack(startMessage);
@@ -1597,9 +1599,10 @@ bool readCard(nfcTagObject * nfcTag) {
   else if (piccType == MFRC522::PICC_TYPE_MIFARE_UL )
   {
     byte buffer2[18];
-    byte size2 = sizeof(buffer2);
+    byte buffer2_size = sizeof(buffer2);
+    //TODO check if bug b/c MIFARE_Read overwrites bufferSize if STATUS_OK
 
-    status = (MFRC522::StatusCode)mfrc522.MIFARE_Read(8, buffer2, &size2);
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Read(8, buffer2, &buffer2_size);
     if (status != MFRC522::STATUS_OK) {
       Serial.print(F("MIFARE_Read_1() failed: "));
       Serial.println(mfrc522.GetStatusCodeName(status));
@@ -1607,7 +1610,7 @@ bool readCard(nfcTagObject * nfcTag) {
     }
     memcpy(buffer, buffer2, 4);
 
-    status = (MFRC522::StatusCode)mfrc522.MIFARE_Read(9, buffer2, &size2);
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Read(9, buffer2, &buffer2_size);
     if (status != MFRC522::STATUS_OK) {
       Serial.print(F("MIFARE_Read_2() failed: "));
       Serial.println(mfrc522.GetStatusCodeName(status));
@@ -1615,7 +1618,7 @@ bool readCard(nfcTagObject * nfcTag) {
     }
     memcpy(buffer + 4, buffer2, 4);
 
-    status = (MFRC522::StatusCode)mfrc522.MIFARE_Read(10, buffer2, &size2);
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Read(10, buffer2, &buffer2_size);
     if (status != MFRC522::STATUS_OK) {
       Serial.print(F("MIFARE_Read_3() failed: "));
       Serial.println(mfrc522.GetStatusCodeName(status));
@@ -1623,7 +1626,7 @@ bool readCard(nfcTagObject * nfcTag) {
     }
     memcpy(buffer + 8, buffer2, 4);
 
-    status = (MFRC522::StatusCode)mfrc522.MIFARE_Read(11, buffer2, &size2);
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Read(11, buffer2, &buffer2_size);
     if (status != MFRC522::STATUS_OK) {
       Serial.print(F("MIFARE_Read_4() failed: "));
       Serial.println(mfrc522.GetStatusCodeName(status));
@@ -1732,7 +1735,7 @@ void writeCard(nfcTagObject nfcTag) {
                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
                     };
 
-  byte size = sizeof(buffer);
+  byte buffer_size = sizeof(buffer);
 
   mifareType = mfrc522.PICC_GetType(mfrc522.uid.sak);
 
@@ -1766,35 +1769,35 @@ void writeCard(nfcTagObject nfcTag) {
   Serial.print(F("Writing data into block "));
   Serial.print(blockAddr);
   Serial.println(F(" ..."));
-  dump_byte_array(buffer, 16);
+  dump_byte_array(buffer, buffer_size);
   Serial.println();
 
   if ((mifareType == MFRC522::PICC_TYPE_MIFARE_MINI ) ||
       (mifareType == MFRC522::PICC_TYPE_MIFARE_1K ) ||
       (mifareType == MFRC522::PICC_TYPE_MIFARE_4K ) )
   {
-    status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(blockAddr, buffer, 16);
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(blockAddr, buffer, buffer_size);
   }
   else if (mifareType == MFRC522::PICC_TYPE_MIFARE_UL )
   {
     byte buffer2[16];
-    byte size2 = sizeof(buffer2);
+    byte buffer2_size = sizeof(buffer2);
 
-    memset(buffer2, 0, size2);
+    memset(buffer2, 0, buffer2_size);
     memcpy(buffer2, buffer, 4);
-    status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(8, buffer2, 16);
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(8, buffer2, buffer2_size);
 
-    memset(buffer2, 0, size2);
+    memset(buffer2, 0, buffer2_size);
     memcpy(buffer2, buffer + 4, 4);
-    status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(9, buffer2, 16);
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(9, buffer2, buffer2_size);
 
-    memset(buffer2, 0, size2);
+    memset(buffer2, 0, buffer2_size);
     memcpy(buffer2, buffer + 8, 4);
-    status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(10, buffer2, 16);
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(10, buffer2, buffer2_size);
 
-    memset(buffer2, 0, size2);
+    memset(buffer2, 0, buffer2_size);
     memcpy(buffer2, buffer + 12, 4);
-    status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(11, buffer2, 16);
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(11, buffer2, buffer2_size);
   }
 
   if (status != MFRC522::STATUS_OK) {
