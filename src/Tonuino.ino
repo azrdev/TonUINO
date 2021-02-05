@@ -1111,15 +1111,21 @@ void loop() {
   } while (!mfrc522.PICC_IsNewCardPresent());
 
   // RFID Karte wurde aufgelegt
-
   if (!mfrc522.PICC_ReadCardSerial())
     return;
 
-  if (readCard(&myCard) == true) {
-    if (myCard.cookie == cardCookie && myCard.nfcFolderSettings.folder != 0 && myCard.nfcFolderSettings.mode != 0) {
-      playFolder();
-    }
+  const uint8_t previousFolder = myFolder->folder;
+  if (readCard(&myCard) == true) { // readCard updates state (myFolder etc)
 
+    // play the folder from the read card
+    if (myCard.cookie == cardCookie &&
+        myCard.nfcFolderSettings.folder != 0 &&
+        myCard.nfcFolderSettings.mode != 0) {
+      // but if it's already playing, don't restart the track
+      if(previousFolder != myFolder->folder) {
+        playFolder();
+      }
+    }
     // Neue Karte konfigurieren
     else if (myCard.cookie != cardCookie) {
       knownCard = false;
