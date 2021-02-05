@@ -48,6 +48,14 @@ struct nfcTagObject {
   //  uint8_t special2;
 };
 
+// One Button used by playShortCut
+enum ShortCut {
+  PAUSE = 0,
+  NEXT = 1,
+  PREVIOUS = 2,
+  STARTUP = 3,
+};
+
 // admin settings stored in eeprom
 struct adminSettings {
   uint32_t cookie;
@@ -160,10 +168,10 @@ void resetSettings() {
   mySettings.locked = false;
   mySettings.standbyTimer = 0;
   mySettings.invertVolumeButtons = true;
-  mySettings.shortCuts[0].folder = 0;
-  mySettings.shortCuts[1].folder = 0;
-  mySettings.shortCuts[2].folder = 0;
-  mySettings.shortCuts[3].folder = 0;
+  mySettings.shortCuts[ShortCut::PAUSE].folder = 0;
+  mySettings.shortCuts[ShortCut::NEXT].folder = 0;
+  mySettings.shortCuts[ShortCut::PREVIOUS].folder = 0;
+  mySettings.shortCuts[ShortCut::STARTUP].folder = 0;
   mySettings.adminMenuLocked = 0;
   mySettings.adminMenuPin[0] = 1;
   mySettings.adminMenuPin[1] = 1;
@@ -800,7 +808,7 @@ void setup() {
 
 
   // Start Shortcut "at Startup" - e.g. Welcome Sound
-  playShortCut(3);
+  playShortCut(ShortCut::STARTUP);
 }
 
 void readButtons() {
@@ -941,11 +949,17 @@ void playFolder() {
   }
 }
 
-void playShortCut(uint8_t shortCut) {
+/**
+ * Ein Shortcut wird über einen langen Tastendruck gestartet und funktioniert
+ * nur, wenn gerade nichts abgespielt wird.
+ * Es kann jede der drei Tasten mit einem Shortcut belegt werden, außerdem gibt
+ * es einen Shortcut der beim Start der Box gestartet wird.
+ */
+void playShortCut(ShortCut key) {
   Serial.println(F("=== playShortCut()"));
-  Serial.println(shortCut);
-  if (mySettings.shortCuts[shortCut].folder != 0) {
-    myFolder = &mySettings.shortCuts[shortCut];
+  Serial.println(static_cast<uint8_t>(key));
+  if (mySettings.shortCuts[key].folder != 0) {
+    myFolder = &mySettings.shortCuts[key];
     playFolder();
     disablestandbyTimer();
     delay(1000);
@@ -1028,7 +1042,7 @@ void loop() {
         mp3.playAdvertisement(advertTrack);
       }
       else {
-        playShortCut(0);
+        playShortCut(ShortCut::PAUSE);
       }
       ignorePauseButton = true;
     }
@@ -1042,7 +1056,7 @@ void loop() {
           nextButton();
       }
       else {
-        playShortCut(1);
+        playShortCut(ShortCut::NEXT);
       }
       ignoreUpButton = true;
 #endif
@@ -1065,7 +1079,7 @@ void loop() {
           previousButton();
       }
       else {
-        playShortCut(2);
+        playShortCut(ShortCut::PREVIOUS);
       }
       ignoreDownButton = true;
 #endif
@@ -1087,7 +1101,7 @@ void loop() {
           nextButton();
       }
       else {
-        playShortCut(1);
+        playShortCut(ShortCut::NEXT);
       }
     }
     if (buttonFive.wasReleased()) {
@@ -1098,7 +1112,7 @@ void loop() {
           previousButton();
       }
       else {
-        playShortCut(2);
+        playShortCut(ShortCut::PREVIOUS);
       }
     }
 #endif
