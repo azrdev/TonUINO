@@ -68,6 +68,7 @@ adminSettings mySettings;
 nfcTagObject myCard;
 folderSettings *myFolder;
 unsigned long sleepAtMillis = 0;
+signed long power_led_pin_next_modechange;
 static uint16_t _lastTrackFinished;
 
 static void nextTrack(uint16_t track);
@@ -641,6 +642,7 @@ MFRC522::StatusCode status;
 #define buttonPause A0
 #define buttonUp A1
 #define buttonDown A2
+#define power_led_pin 6
 #define busyPin 4
 #define shutdownPin 7
 #define openAnalogPin A7
@@ -736,7 +738,7 @@ void setup() {
   Serial.println(F("|_   _|___ ___|  |  |     |   | |     |"));
   Serial.println(F("  | | | . |   |  |  |-   -| | | |  |  |"));
   Serial.println(F("  |_| |___|_|_|_____|_____|_|___|_____|\n"));
-  Serial.println(F("TonUINO Version 2.1"));
+  Serial.println(F("TonUINO Version 2.1m"));
   Serial.println(F("created by Thorsten Voß and licensed under GNU/GPL."));
   Serial.println(F("Information and contribution at https://tonuino.de.\n"));
 
@@ -776,6 +778,9 @@ void setup() {
   pinMode(buttonFivePin, INPUT_PULLUP);
 #endif
   pinMode(shutdownPin, OUTPUT);
+  pinMode(power_led_pin, OUTPUT);
+  digitalWrite(power_led_pin, HIGH);
+  power_led_pin_next_modechange = millis() + 5000;
   digitalWrite(shutdownPin, LOW);
 
 
@@ -947,6 +952,19 @@ void playShortCut(uint8_t shortCut) {
 
 void loop() {
   do {
+    // set power_led_pin up in short bursts to prevent powerbank shutdown
+    if(abs(power_led_pin_next_modechange) < millis()) {
+      if(power_led_pin_next_modechange > 0) {
+        Serial.println("set power_led up for 333ms");
+        power_led_pin_next_modechange = - millis() -333;
+        digitalWrite(power_led_pin, HIGH);
+      } else {
+        Serial.println("set power_led down for 20s");
+        power_led_pin_next_modechange = millis() + 20000;
+        digitalWrite(power_led_pin, LOW);
+      }
+    }
+
     checkStandbyAtMillis();
     mp3.loop();
 
